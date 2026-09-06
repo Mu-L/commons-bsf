@@ -20,11 +20,15 @@ package org.apache.bsf.engines.xslt;
 import java.io.File;
 import java.io.Reader;
 import java.io.StringReader;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Vector;
 
+import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.URIResolver;
 import javax.xml.transform.dom.DOMResult;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamSource;
@@ -36,6 +40,7 @@ import org.apache.bsf.BSF_Log;
 import org.apache.bsf.BSF_LogFactory;
 import org.apache.bsf.util.BSFEngineImpl;
 import org.apache.bsf.util.BSFFunctions;
+import org.apache.commons.xml.secure.SecureTransformerFactory;
 import org.apache.xpath.objects.XObject;
 import org.w3c.dom.Node;
 
@@ -167,7 +172,22 @@ public class XSLTEngine extends BSFEngineImpl {
     public void initialize(final BSFManager mgr, final String lang, final Vector declaredBeans) throws BSFException {
         super.initialize(mgr, lang, declaredBeans);
 
-        tFactory = TransformerFactory.newInstance();
+        tFactory = SecureTransformerFactory.newInstance();
+        // The secure factory resolves URIs that no resolver handles to empty content; imported and
+        // referenced documents are part of the script here, so restore the default resolution for them.
+        tFactory.setURIResolver(new URIResolver() {
+            public Source resolve(final String href, final String base) throws TransformerException {
+                try {
+                    URL baseUrl = new File("").toURI().toURL();
+                    if (base != null && !base.isEmpty()) {
+                        baseUrl = new URL(baseUrl, base);
+                    }
+                    return new StreamSource(new URL(baseUrl, href).toExternalForm());
+                } catch (final MalformedURLException e) {
+                    throw new TransformerException(e);
+                }
+            }
+        });
     }
 
     /**
